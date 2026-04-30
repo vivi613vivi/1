@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>评价研判助手</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #f5f6fa; color: #1a1a2e; line-height: 1.6; }
+  .container { max-width: 860px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { font-size: 24px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #888; margin-bottom: 28px; }
+  .card { background: #fff; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .card-title { font-size: 13px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  label { display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px; }
+  select, textarea {
+    width: 100%; padding: 10px 12px; border: 1.5px solid #e0e0e0; border-radius: 8px;
+    font-size: 14px; font-family: inherit; color: #1a1a2e; background: #fafafa;
+    transition: border-color 0.15s;
+  }
+  select:focus, textarea:focus {
+    outline: none; border-color: #6366f1; background: #fff;
+  }
+  textarea { resize: vertical; min-height: 140px; }
+  .char-count { font-size: 12px; color: #aaa; text-align: right; margin-top: 4px; }
+  .image-zone {
+    border: 2px dashed #d0d0d0; border-radius: 10px; padding: 20px;
+    text-align: center; cursor: pointer; color: #aaa; font-size: 13px;
+    transition: border-color 0.15s, background 0.15s;
+    min-height: 80px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px;
+  }
+  .image-zone.drag-over { border-color: #6366f1; background: #f0f0ff; }
+  .image-zone svg { opacity: 0.4; margin-bottom: 4px; }
+  .thumb-strip { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+  .thumb-wrap { position: relative; }
+  .thumb-wrap img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid #e0e0e0; display: block; }
+  .thumb-remove {
+    position: absolute; top: -6px; right: -6px; width: 20px; height: 20px;
+    background: #ef4444; color: #fff; border: none; border-radius: 50%;
+    font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    line-height: 1;
+  }
+  .btn-primary {
+    width: 100%; padding: 13px; background: #6366f1; color: #fff; border: none;
+    border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer;
+    transition: background 0.15s, opacity 0.15s; display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-primary:hover:not(:disabled) { background: #4f46e5; }
+  .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+  .spinner { width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #result-panel { display: none; }
+  .badge {
+    display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 16px;
+  }
+  .badge-pornographic { background: #dc2626; }
+  .badge-sexual-lead { background: #ea580c; }
+  .badge-vulgar { background: #d97706; }
+  .badge-poi-suspected { background: #7c3aed; }
+  .badge-report { background: #2563eb; }
+  .badge-clean { background: #16a34a; }
+  .result-row { margin-bottom: 14px; }
+  .result-label { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; }
+  .result-value { font-size: 14px; color: #1a1a2e; line-height: 1.65; }
+  .result-rule { font-family: "SF Mono", "Fira Code", monospace; background: #f0f0f0; padding: 3px 8px; border-radius: 5px; font-size: 13px; display: inline-block; }
+  .boundary-box { background: #fef9c3; border-left: 4px solid #eab308; border-radius: 6px; padding: 12px 14px; margin-top: 6px; font-size: 14px; color: #713f12; line-height: 1.65; }
+  .no-boundary { font-size: 13px; color: #aaa; font-style: italic; }
+  .error-box { background: #fee2e2; border-left: 4px solid #ef4444; border-radius: 6px; padding: 12px 14px; font-size: 14px; color: #7f1d1d; }
+  .divider { border: none; border-top: 1px solid #eee; margin: 14px 0; }
+  .hint { font-size: 12px; color: #aaa; margin-top: 5px; }
+  #file-input { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>评价研判助手</h1>
+  <p class="subtitle">粘贴评价内容，AI 根据规则自动研判违规标签</p>
+
+  <!-- POI Category -->
+  <div class="card">
+    <label for="category">门店类目</label>
+    <select id="category">
+      <option value="" disabled selected>请选择门店类目</option>
+      <optgroup label="高危类目">
+        <option value="丽人-美容美体-SPA美体">丽人-美容美体-SPA美体</option>
+        <option value="休闲娱乐-洗浴按摩-足疗按摩">休闲娱乐-洗浴按摩-足疗按摩</option>
+        <option value="休闲娱乐-洗浴按摩-洗浴中心">休闲娱乐-洗浴按摩-洗浴中心</option>
+        <option value="休闲娱乐-洗浴按摩-汗蒸/温泉馆">休闲娱乐-洗浴按摩-汗蒸/温泉馆</option>
+        <option value="休闲娱乐-洗浴按摩-其他洗浴按摩">休闲娱乐-洗浴按摩-其他洗浴按摩</option>
+        <option value="休闲娱乐-电影-私人影院">休闲娱乐-电影-私人影院</option>
+        <option value="休闲娱乐-推理/桌游-桌游馆">休闲娱乐-推理/桌游-桌游馆</option>
+        <option value="休闲娱乐-茶馆-茶馆">休闲娱乐-茶馆-茶馆</option>
+        <option value="休闲娱乐-传统娱乐-KTV">休闲娱乐-传统娱乐-KTV</option>
+        <option value="休闲娱乐-新奇体验-新奇体验">休闲娱乐-新奇体验-新奇体验</option>
+      </optgroup>
+      <optgroup label="非高危类目">
+        <option value="餐饮-其他">餐饮</option>
+        <option value="购物-其他">购物/零售</option>
+        <option value="酒店-其他">酒店/住宿</option>
+        <option value="旅游景点-其他">旅游景点</option>
+        <option value="生活服务-其他">生活服务</option>
+        <option value="教育培训-其他">教育培训</option>
+        <option value="医疗健康-其他">医疗健康</option>
+        <option value="其他类目">其他类目</option>
+      </optgroup>
+    </select>
+  </div>
+
+  <!-- Review Text -->
+  <div class="card">
+    <label for="review-text">评价文本</label>
+    <textarea id="review-text" placeholder="粘贴或输入评价内容..." oninput="updateCharCount()"></textarea>
+    <div class="char-count"><span id="char-count">0</span> 字</div>
+  </div>
+
+  <!-- Images -->
+  <div class="card">
+    <label>评价配图（可选，最多 5 张）</label>
+    <div class="image-zone" id="image-zone" onclick="document.getElementById('file-input').click()">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+      <span>点击上传，或将图片拖拽/粘贴至此处</span>
+      <span style="font-size:11px">支持 JPG、PNG、WEBP、GIF，单张最大 5MB</span>
+    </div>
+    <input type="file" id="file-input" multiple accept="image/*" onchange="handleFileSelect(event)">
+    <div class="thumb-strip" id="thumb-strip"></div>
+  </div>
+
+  <!-- Submit -->
+  <button class="btn-primary" id="submit-btn" onclick="submitAnalysis()">
+    开始研判
+  </button>
+
+  <!-- Result -->
+  <div id="result-panel" style="margin-top:20px;">
+    <div class="card" id="result-content"></div>
+  </div>
+</div>
+
+<script>
+  // ─── State ───────────────────────────────────────────────────────────────
+  let images = []; // { file, dataUrl, mimeType }
+
+  // ─── Char count ──────────────────────────────────────────────────────────
+  function updateCharCount() {
+    const v = document.getElementById('review-text').value;
+    document.getElementById('char-count').textContent = v.length;
+  }
+
+  // ─── Image handling ──────────────────────────────────────────────────────
+  function addImageFile(file) {
+    if (images.length >= 5) { alert('最多只能上传 5 张图片'); return; }
+    if (file.size > 5 * 1024 * 1024) { alert(`图片 "${file.name}" 超过 5MB 限制`); return; }
+    if (!file.type.startsWith('image/')) { alert('请上传图片文件'); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      images.push({ file, dataUrl: e.target.result, mimeType: file.type });
+      renderThumbs();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function renderThumbs() {
+    const strip = document.getElementById('thumb-strip');
+    strip.innerHTML = '';
+    images.forEach((img, i) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'thumb-wrap';
+      const im = document.createElement('img');
+      im.src = img.dataUrl;
+      const btn = document.createElement('button');
+      btn.className = 'thumb-remove';
+      btn.innerHTML = '×';
+      btn.title = '删除';
+      btn.onclick = (e) => { e.stopPropagation(); images.splice(i, 1); renderThumbs(); };
+      wrap.appendChild(im);
+      wrap.appendChild(btn);
+      strip.appendChild(wrap);
+    });
+  }
+
+  function handleFileSelect(e) {
+    Array.from(e.target.files).forEach(addImageFile);
+    e.target.value = '';
+  }
+
+  // Drag & drop
+  const zone = document.getElementById('image-zone');
+  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    Array.from(e.dataTransfer.files).forEach(addImageFile);
+  });
+
+  // Paste anywhere on the page
+  document.addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        addImageFile(item.getAsFile());
+      }
+    }
+  });
+
+  // ─── Submit ──────────────────────────────────────────────────────────────
+  async function submitAnalysis() {
+    const text = document.getElementById('review-text').value.trim();
+    const category = document.getElementById('category').value;
+
+    if (!text && images.length === 0) {
+      alert('请输入评价文本或上传图片');
+      return;
+    }
+
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner"></div> 研判中...';
+
+    const fd = new FormData();
+    fd.append('text', text);
+    fd.append('category', category || '');
+    images.forEach(img => fd.append('images', img.file));
+
+    try {
+      const resp = await fetch('/api/analyze', { method: 'POST', body: fd });
+      const data = await resp.json();
+      renderResult(data);
+    } catch (err) {
+      renderError('网络错误：' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '开始研判';
+    }
+  }
+
+  // ─── Result rendering ────────────────────────────────────────────────────
+  const LABEL_CLASS = {
+    '色情底线': 'pornographic',
+    '色导评价': 'sexual-lead',
+    '低俗评价': 'vulgar',
+    'POI疑似低俗评价': 'poi-suspected',
+    '评价举报-门店涉黄': 'report',
+    '不违规': 'clean',
+  };
+
+  function renderResult(data) {
+    const panel = document.getElementById('result-panel');
+    const content = document.getElementById('result-content');
+    panel.style.display = 'block';
+
+    if (data.error) {
+      content.innerHTML = `<div class="error-box"><strong>错误：</strong>${escHtml(data.error)}</div>`;
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+
+    const label = data.violation_label || '未知';
+    const cls = LABEL_CLASS[label] || 'clean';
+    const rules = data.hit_rules || '无';
+    const reasoning = data.reasoning || '—';
+    const boundary = data.boundary_analysis;
+
+    const boundaryHtml = boundary
+      ? `<div class="boundary-box">${escHtml(boundary)}</div>`
+      : `<div class="no-boundary">无边界争议，判断明确</div>`;
+
+    content.innerHTML = `
+      <span class="badge badge-${cls}">${escHtml(label)}</span>
+      <div class="result-row">
+        <div class="result-label">命中细则</div>
+        <div class="result-value"><span class="result-rule">${escHtml(rules)}</span></div>
+      </div>
+      <hr class="divider">
+      <div class="result-row">
+        <div class="result-label">研判理由</div>
+        <div class="result-value">${escHtml(reasoning)}</div>
+      </div>
+      <hr class="divider">
+      <div class="result-row">
+        <div class="result-label">边界分析</div>
+        ${boundaryHtml}
+      </div>
+    `;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderError(msg) {
+    const panel = document.getElementById('result-panel');
+    const content = document.getElementById('result-content');
+    panel.style.display = 'block';
+    content.innerHTML = `<div class="error-box"><strong>错误：</strong>${escHtml(msg)}</div>`;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function escHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');
+  }
+</script>
+</body>
+</html>
